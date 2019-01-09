@@ -1,9 +1,10 @@
-
 var  request = require('request');
 var cheerio = require('cheerio');
 const  mongoose = require('mongoose');
 const ProductModel = require('./Models/ProductModel');
 const ICKalaModel = require('./Models/ICKalaModel');
+const JavanModel = require('./Models/JavanModel');
+const NameConversionModel = require('./Models/NameConversionModel');
 const config = require('./config');
 
 const port = config.Port;
@@ -12,6 +13,7 @@ mongoose.Promise = global.Promise;
 mongoose.connect(config.DBAddress, {useNewUrlParser: true})
     .then(() => {
         console.log("Connected");
+        updateEtrixPrices();
    }).catch((e) => {
         console.log("Disconnected");
         console.log(e);
@@ -28,6 +30,9 @@ var productPrice = 0;
 var founded = false;
 var counterFounded = 0;
 var counterNotFounded = 0;
+var ickalaCounter = 0 ;
+var javanCounter = 0;
+var etrixNotFounded = 0 ;
 
 function updateICKalaPrices() {
   var urlsOfProducts = [
@@ -160,73 +165,308 @@ function updateICKalaPrices() {
 }
 
 
-function updateJavanPrices() {
-  var urlsOfProducts = [
-  ""
-  ];
-
+function updateJavanICPrices() {
   var errorCounter = 0 ;
   var productUpdated = 0 ;
   var productNotUpdated = 0 ;
-  var interval = 6 * 1000; // 5 seconds;
-  for (var i = 0; i < urlsOfProducts.length; i++) {
-   let url =  urlsOfProducts[i];
-   // console.log("urlsOfProducts[i]") ;console.log(url) ;
-   // delay 5 Seconds 
+  var interval = 6 * 1000; // 6 seconds;
+  for (var i = 709; i < 921; i++) { //230 
+   let url =  "http://javanelec.com/Shops/SearchProduct?productCategory=1&SpecialFilter=&sortColumn=Id&sortOrder=asc&pageNumber="+i+"&pageSize=24&filters=&searchFilter=&instock=False";
+   // delay 6 Seconds 
    setTimeout( function() {
      console.log("url") ;console.log(url) ;
     request(url, function(error, response, body) {
-     if(error) { console.log("Error: " + error); errorCounter = errorCounter + 1 ;}
+     if(error) { console.log("Error: " + error); errorCounter = errorCounter + 1 ;console.log("errorCounter :"+errorCounter);}
      console.log("fetched");
      var $ = cheerio.load(body);
-     $('.ajax_block_product div.right-block').each(function( index ) {
-       if($(this).find('#send_request_form').length == 0) {
-          var productName = $(this).find('.product-name').text().trim();
-          var tempProductName = productName;
-          tempProductName = tempProductName.toLowerCase();
-          // if( (tempProductName.includes(productSearch.toLowerCase())) ) {
-              tempProductPrice = $(this).find('.product-price').text().trim();
-            if(tempProductPrice != "") {
+     $('.product-item-detail').each(function( index ) {
+      var temp = $(this).find('.col-xs-12');
+       var checkExistance = $(this).text();
+       // console.log();
+      console.log("************************************");
+       if(checkExistance.includes("موجود")) {
+          console.log("is exist");
+          var productName = $(this).find('.hidden-md-down span.text-ellipsis').text().trim();
+          console.log("productName");
+          console.log(productName);
+              var tempProductPrice = $(this).find('s').text().trim();
+              tempProductPrice = tempProductPrice.replace("ریال","");//console.log(tempProductPrice);
               founded = true;
-              var Price = tempProductPrice.match(/\d/g);
-              Price = Price.join("");
-              Price = parseInt(parseInt(Price)/10) ;  
-              var number =  $(this).find('.quantityavailable_multicart2 a').text().trim() ;
-              console.log("Price :"+Price+" number : "+number);
-              let tempICKalaModel = new ICKalaModel({
+              var Price = parseInt(parseInt(tempProductPrice)/10) ;  
+              console.log("Price");console.log(Price);
+              var productId = $(this).find('a[title="اضافه به سبد"]').attr("onclick").replace("addToCart(","");
+              productId = productId.replace(")","");
+              console.log(productId);
+              // must be logined
+              // var urlNum = "http://javanelec.com/ShoppingCarts/Create?productId="+productId;
+              
+
+              // var number =  $(this).find('.quantityavailable_multicart2 a').text().trim() ;
+              // console.log("Price :"+Price+" number : "+number);
+              let tempJavanModel = new JavanModel({
                 manufacturer_part_number: productName,
-                quantity_available: number,
-                unit_price: Price
+                quantity_available: 1,
+                productId: productId,
+                unit_price: Price,
+                haveIt: false
               });   
-              tempICKalaModel.save().then(() => {
+              tempJavanModel.save().then(() => {
                   productUpdated = productUpdated + 1 ;
                   console.log("productUpdated "+productUpdated);
               }).catch((e) => {
                  console.log('Error');
                 console.log(e);
               });       
-             } else {
-              var tempICKalaModel = new ICKalaModel({
-                 manufacturer_part_number: productName,
-                 quantity_available: number,
-                 unit_price: Price
-               });   
-               tempICKalaModel.save().then(() => {
-                  productNotUpdated = productNotUpdated + 1 ;
-                  console.log("productNotUpdated "+productNotUpdated);
-               }).catch((e) => {
-                  console.log('Error');
-                 console.log(e);
-              });
-             }
-          // }
-       }
+            
+         
+       } else {productNotUpdated = productNotUpdated + 1 ;console.log("not exist: " + productNotUpdated);}
      });
   });
  }, 
-    interval * i, i);
+    interval * (i-230), i);
  }
 }
+
+function updateEtrixPrices() {
+  console.log("updateEtrixPrices");
+  var ICKalaProducts, JavanProducts, EtrixProducts, NameConversion ;
+  var counterUpdated = 0;
+   //Where User is you mongoose user model
+    ProductModel.find({} , (err, products) => {
+        if(err) {} //do something...
+        console.log("Etrix length");
+        console.log(products.length);
+        EtrixProducts = products ;
+        ICKalaModel.find({} , (err, productsIcKala) => {
+          console.log("ICKalaModel length");
+          console.log(productsIcKala.length);
+          ICKalaProducts = productsIcKala ;
+          JavanModel.find({} , (err, productsJavan) => {
+            JavanProducts = productsJavan ;
+            console.log("JavanModel length");
+            console.log(productsJavan.length);
+
+            EtrixProducts.map(product => {
+              var checkJavanNeed = true;
+              // search in ickala products
+              ICKalaProducts.map(ICKalaproduct => {
+                if(product.manufacturer_part_number === ICKalaproduct.manufacturer_part_number) {
+                   checkFounded = false;
+                   console.log("Etrix product find in IcKala");
+                   if( (product.quantity_available !== ICKalaproduct.quantity_available) || 
+                    (product.unit_price !== ICKalaproduct.unit_price) ) {
+                      console.log("price or number was changed");
+                      ProductModel.findOneAndUpdate({'manufacturer_part_number': product.manufacturer_part_number}, 
+                              {'unit_price': ICKalaproduct.unit_price, 'quantity_available': ICKalaproduct.quantity_available},  function(err, doc){
+                        if (err) {console.log('reject : ' + err); }
+                        counterUpdated = counterUpdated + 1 ;
+                        console.log("ICKala counterUpdated :"+counterUpdated);
+                        // console.log(product);
+                      });
+                   } else {
+                      console.log("price and number does not change");
+                   }
+                }
+              });
+              // if does not find in ickala products, search in javan
+              if(checkJavanNeed) {
+                  JavanProducts.map(JavanProduct => {
+                   if(product.manufacturer_part_number === JavanProduct.manufacturer_part_number) {
+                       console.log("Etrix product find in JavanProducts");
+                     if( (product.quantity_available !== JavanProduct.quantity_available) || 
+                           (product.unit_price !== JavanProduct.unit_price) ) {
+                         console.log("price or number was changed");
+                         ProductModel.findOneAndUpdate({'manufacturer_part_number': product.manufacturer_part_number}, 
+                              {'unit_price': JavanProduct.unit_price, 'quantity_available': JavanProduct.quantity_available},  function(err, doc){
+                        if (err) {console.log('reject : ' + err); }
+                        counterUpdated = counterUpdated + 1 ;
+                        console.log("Javan counterUpdated :"+counterUpdated);
+                        // console.log(product);
+                      });
+                     } else {
+                      console.log("price and number does not change");
+                     }
+                   }
+                 });
+              }
+
+            });
+
+            NameConversionModel.find({} , (err, nameConversions) => {
+                 nameConversions.map(nameConversion => {
+                     ICKalaProducts.map(icKalaProduct => {
+                          if(nameConversion.name === icKalaProduct.manufacturer_part_number) {
+                            console.log("nameConversion");
+                            ProductModel.findOne({'manufacturer_part_number': nameConversion.value}, function(err,obj) { 
+                              if(obj !== null) {
+                                console.log(obj);
+                                if( (obj.quantity_available !== icKalaProduct.quantity_available) || 
+                                     (obj.unit_price !== icKalaProduct.unit_price) ) {
+                                  ProductModel.findOneAndUpdate({'manufacturer_part_number': nameConversion.value}, 
+                                    {'unit_price': icKalaProduct.unit_price, 'quantity_available': icKalaProduct.quantity_available}, 
+                                     function(err, doc) {
+                                      if (err) {console.log('reject : ' + err); }
+                                      counterUpdated = counterUpdated + 1 ;
+                                      console.log("ICKala NameConversionModel counterUpdated :"+counterUpdated);
+                                       // console.log(product);
+                                  });
+                                }
+                              } else {console.log("nameConversion is not finded in Etrix");}
+                            });
+                          }
+                     });
+                 });
+            });
+
+          });
+        });
+      });
+    //     products.map(product => {
+    //         //Do somethign with the user
+    //        ICKalaModel.findByName(product.manufacturer_part_number).then((prodctIckala) => {
+    //         if(prodctIckala != null) {
+    //           ickalaCounter = ickalaCounter + 1 ;
+    //           console.log('ICKala founded: '+ickalaCounter);
+    //           console.log(prodctIckala);
+    //           product.update({quantity_available: prodctIckala.quantity_available, unit_price: prodctIckala.unit_price});
+    //         } else {
+    //           JavanModel.findByName(product.manufacturer_part_number).then((productJavan) => {
+    //             if(productJavan != null) {
+    //               javanCounter = javanCounter + 1 ;
+    //               console.log('JavaElec founded: '+javanCounter);
+    //               product.update({quantity_available: productJavan.quantity_available, unit_price: productJavan.unit_price});
+    //             } else {
+    //               etrixNotFounded = etrixNotFounded + 1;
+    //               console.log('Etrix founded: '+etrixNotFounded);
+    //             }
+    //           }).catch((e) => {
+    //              console.log('Javan not founded: '+e);
+    //           });
+    //         }
+    //        }).catch((e) => {
+    //          console.log('ICKala not founded: '+e);
+    //        });
+    //     });
+    // });
+}
+
+function checkEtrixDataBase() {
+  console.log("checkEtrixDataBase");
+  ProductModel.find({} , (err, products) => {
+        if(err){} //do something... STM32F407ZGT6
+        console.log("Etrix length:"+products.length);
+        var  counterIsexist = 0;
+        
+
+        // 1351 in ICKala
+       ICKalaModel.find({} , (err, ICKalaProducts) => {
+          console.log("ICKalaProducts length:"+ICKalaProducts.length);
+          products.map(product => {
+            ICKalaProducts.map(ICKalaProduct => {
+              if(product.manufacturer_part_number === ICKalaProduct.manufacturer_part_number) {
+                counterIsexist = counterIsexist + 1 ;
+                console.log("counterIsexist:"+counterIsexist);
+                return null ;
+              }
+            });
+          });
+        });
+       // 615 in Javan
+       JavanModel.find({} , (err, JavanProducts) => {
+          console.log("JavanProducts length:"+JavanProducts.length);
+          products.map(product => {
+            JavanProducts.map(JavanProduct => {
+              if(product.manufacturer_part_number === JavanProduct.manufacturer_part_number) {
+                counterIsexist = counterIsexist + 1 ;
+                console.log("counterIsexist:"+counterIsexist);
+                return null ;
+              }
+            });
+          });
+        });
+        
+        // var testNum = 5801 ;
+        // console.log(products[testNum].manufacturer_part_number);
+        // ICKalaModel.findByName(products[testNum].manufacturer_part_number).then((prodctIckala) => {
+        //   if(prodctIckala != null) {
+        //     console.log("prodctIckala");
+        //     console.log(prodctIckala);
+        //   } else {
+        //     console.log("ICkala do not find product");
+        //   }
+          
+        // }).catch((e) => {
+        //      console.log('ICKala not founded: '+e);
+        // });
+        // var counter = 0;
+        // products.map(product => {
+        //   ICKalaModel.findByName(product.manufacturer_part_number).then((prodctIckala) => {
+        //   if(prodctIckala != null) {
+        //     counter = counter + 1;
+        //     console.log("prodctIckala counter:" + counter);
+        //     console.log(prodctIckala);
+        //   } else {
+        //     console.log("ICkala do not find product");
+        //   }
+        // }).catch((e) => {
+        //      console.log('ICKala not founded: '+e);
+        // });
+        //   // if(product.manufacturer_part_number === "STM32F407ZGT6") {
+        //   //   console.log("founded :"+ counter);
+        //   //   console.log(product);
+        //   // }
+        //   // counter = counter + 1;
+        // });
+        // console.log("founded counter:"+counter);
+  });
+   // //Where User is you mongoose user model
+   //  ProductModel.find({ unit_price: { $ne: "0" } } , (err, products) => {
+   //      if(err) //do something...
+   //       console.log("founded");
+   //       console.log("length:"+products.length);
+   //  });
+}
+
+function importCommonDataToDB() {
+  var commons = require('E:/Work/EE/Code/UpdatePrice/JsonFile/commons.json');
+  console.log("commons");
+  console.log(commons[2].data.length);
+  var data = commons[2].data;
+  var counterDataSaved = 0 ;
+  //write to data base
+  for(var i=0; i< data.length; i++ ) {
+   let newProductModel = new ProductModel(data[i]);
+   newProductModel.save().then(() => {
+         counterDataSaved = counterDataSaved + 1 ;
+    }).catch((e) => {
+        console.log("********************");
+        console.log(e);
+    });
+  }
+}
+
+function importNameConversionData() {
+  var commons = require('E:/Work/EE/Code/UpdatePrice/JsonFile/re_caps.json');
+  console.log("importNameConversionData");
+  console.log(commons[2].data.length);
+  var data = commons[2].data;
+  var counterDataSaved = 0 ;
+  //write to data base
+  for(var i=0; i< data.length; i++ ) {
+   let newProductModel = new NameConversionModel(data[i]);
+   newProductModel.save().then(() => {
+         counterDataSaved = counterDataSaved + 1 ;
+         console.log("counterDataSaved :"+counterDataSaved);
+    }).catch((e) => {
+        console.log("********************");
+        console.log(e);
+    });
+  }
+}
+
+
+
+// updateEtrixPrices();
 
 // function getICKalaProducts(url) {
 //  request(url, function(error, response, body) {
@@ -273,24 +513,6 @@ function updateJavanPrices() {
 //  });
 // }
 
-
-// function importCommonDataToDB() {
-//  var commons = require('E:/Work/EE/Code/UpdatePrice/JsonFile/commons.json');
-//  console.log("commons");
-//  console.log(commons[2].data.length);
-//  var data = commons[2].data;
-//  var counterDataSaved = 0 ;
-//  //write to data base
-//  for(var i=0; i< data.length; i++ ) {
-//    let newProductModel = new ProductModel(data[i]);
-//    newProductModel.save().then(() => {
-//          counterDataSaved = counterDataSaved + 1 ;
-//     }).catch((e) => {
-//         console.log("********************");
-//         console.log(e);
-//     });
-//  }
-// }
 
 // var counterReceived = 0;
 //     // console.log(data[0]);

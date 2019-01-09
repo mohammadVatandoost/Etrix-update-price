@@ -25,8 +25,8 @@ const ProductSchema = new Schema({
 });
 
 ProductSchema.statics.findByName = function (name) {
-    let User = this;
-    return User.findOne({
+    let product = this;
+    return product.findOne({
         'manufacturer_part_number': name,
     });
 };
