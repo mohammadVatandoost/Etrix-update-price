@@ -1,6 +1,23 @@
 var  request = require('request');
 var cheerio = require('cheerio');
 const  mongoose = require('mongoose');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const csvWriter = createCsvWriter({
+    path: 'productsName.csv',
+    header: [
+        {id: 'name', title: 'NAME'},
+        {id: 'website', title: 'Website'}
+    ]
+});
+ 
+// const records = [
+//     {name: 'Bob',  lang: 'French, English'},
+//     {name: 'Mary', lang: 'English'}
+// ];
+
+
+
+
 const ProductModel = require('./Models/ProductModel');
 const ICKalaModel = require('./Models/ICKalaModel');
 const JavanModel = require('./Models/JavanModel');
@@ -13,7 +30,7 @@ mongoose.Promise = global.Promise;
 mongoose.connect(config.DBAddress, {useNewUrlParser: true})
     .then(() => {
         console.log("Connected");
-        updateEtrixPrices();
+        EtrixNotHave();
    }).catch((e) => {
         console.log("Disconnected");
         console.log(e);
@@ -464,7 +481,72 @@ function importNameConversionData() {
   }
 }
 
+function EtrixNotHave() {
+  console.log("EtrixNotHave");
+  // just check ICKala
+  var ICKalaProducts, JavanProducts, EtrixProducts, NameConversion ;
+  var counterUpdated = 0;
+  var counterNotHave = 0;
+  const productsNotFound = [];
+   //Where User is you mongoose user model
+    ProductModel.find({} , (err, products) => {
+        if(err) {} //do something...
+        console.log("Etrix length");
+        console.log(products.length);
+        EtrixProducts = products ;
+        ICKalaModel.find({} , (err, productsIcKala) => {
+          console.log("ICKalaModel length");
+          console.log(productsIcKala.length);
+          ICKalaProducts = productsIcKala ;
+          JavanModel.find({} , (err, productsJavan) => {
+            JavanProducts = productsJavan ;
+            console.log("JavanModel length");
+            console.log(productsJavan.length);
+              // search in ickala products
+            ICKalaProducts.map(ICKalaproduct => {
+               var notFound = true;
+               EtrixProducts.map(product => {
+                if(product.manufacturer_part_number === ICKalaproduct.manufacturer_part_number) {
+                   notFound = false;
+                }
+               });
+               if(notFound) {
+                 console.log(ICKalaproduct.manufacturer_part_number);
+                 counterNotHave = counterNotHave + 1;
+                 productsNotFound.push({name: ICKalaproduct.manufacturer_part_number,  website: 'ICKala'});
+                 console.log(counterNotHave);
+               }
+              // if does not find in ickala products, search in javan
+              // if(checkJavanNeed) {
+              //     JavanProducts.map(JavanProduct => {
+              //      if(product.manufacturer_part_number === JavanProduct.manufacturer_part_number) {
+              //          console.log("Etrix product find in JavanProducts");
+              //        if( (product.quantity_available !== JavanProduct.quantity_available) || 
+              //              (product.unit_price !== JavanProduct.unit_price) ) {
+              //            console.log("price or number was changed");
+              //            ProductModel.findOneAndUpdate({'manufacturer_part_number': product.manufacturer_part_number}, 
+              //                 {'unit_price': JavanProduct.unit_price, 'quantity_available': JavanProduct.quantity_available},  function(err, doc){
+              //           if (err) {console.log('reject : ' + err); }
+              //           counterUpdated = counterUpdated + 1 ;
+              //           console.log("Javan counterUpdated :"+counterUpdated);
+              //           // console.log(product);
+              //         });
+              //        } else {
+              //         console.log("price and number does not change");
+              //        }
+              //      }
+              //    });
+              // }
 
+            });
+            csvWriter.writeRecords(productsNotFound)       // returns a promise
+              .then(() => {
+                   console.log('CSV stored');
+               });
+          });
+        });
+      });
+}
 
 // updateEtrixPrices();
 
